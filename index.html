@@ -969,7 +969,7 @@ function doGet(e) {
     const values = sheet.getDataRange().getValues();
 
     if (values.length &lt;= 1) {
-      return jsonResponse_({ ok: true, data: [] });
+      return jsonResponse_({ ok: true, data: [0] });
     }
 
     const headers = values[0].map(function (h) {
