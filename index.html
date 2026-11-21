@@ -1,0 +1,2574 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pantau Pohon Desa — Monitoring Pertumbuhan Pohon Warga</title>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          },
+          colors: {
+            rimba: {
+              50: '#f2fbf5',
+              100: '#e1f6e8',
+              200: '#c4ecd2',
+              300: '#97ddb2',
+              400: '#62c589',
+              500: '#3baa68',
+              600: '#2b8a52',
+              700: '#246e43',
+              800: '#205838',
+              900: '#1b482f',
+              950: '#0d281a',
+            },
+            tanah: {
+              50: '#faf7f2',
+              100: '#f3ede2',
+              200: '#e6d8c3',
+              300: '#d6be9c',
+              400: '#c39f74',
+              500: '#b48756',
+              600: '#a67549',
+              700: '#8a5e3d',
+              800: '#714e36',
+              900: '#5d412e',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS & JS for Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- Chart.js for Growth Quality & Progress Charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* Custom styling for map container, smooth scrollbars, and subtle leaf accents */
+    body {
+      background-color: #faf7f2;
+      color: #1b2820;
+      overflow-x: hidden;
+    }
+
+    #mapContainer {
+      width: 100%;
+      height: 460px;
+      z-index: 10;
+    }
+
+    @media (max-width: 640px) {
+      #mapContainer {
+        height: 360px;
+      }
+    }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 14px;
+      box-shadow: 0 10px 25px -5px rgba(13, 40, 26, 0.16);
+      border: 1px solid #e1f6e8;
+    }
+
+    .leaflet-popup-content {
+      margin: 12px 14px;
+      font-family: 'Inter', sans-serif;
+    }
+
+    /* Custom pin styling */
+    .tree-pin {
+      width: 28px;
+      height: 28px;
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      border: 3px solid #ffffff;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.28);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .tree-pin-inner {
+      transform: rotate(45deg);
+      width: 9px;
+      height: 9px;
+      border-radius: 9999px;
+      background-color: #ffffff;
+    }
+
+    /* Toast animation */
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(14px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .toast-enter {
+      animation: slideUp 0.25s ease-out forwards;
+    }
+
+    pre code {
+      font-size: 0.78rem;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-tanah-50 text-stone-800">
+
+  <!-- Toast Notification Banner (No alert() used anywhere) -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full px-4 sm:px-0 pointer-events-none"></div>
+
+  <!-- Top Navigation & Brand Header -->
+  <header class="sticky top-0 z-30 bg-rimba-900 text-white border-b border-rimba-800 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between py-3.5 gap-3">
+        <!-- Brand Identity -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-2xl bg-rimba-700 border border-rimba-500/40 flex items-center justify-center shadow-inner shrink-0">
+              <!-- Inline SVG Tree Emblem -->
+              <svg class="w-6 h-6 text-rimba-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22v-7" />
+                <path d="M9 15h6" />
+                <path d="M12 3a6 6 0 0 0-6 6c0 3.5 3 5.5 6 6 3-.5 6-2.5 6-6a6 6 0 0 0-6-6Z" />
+                <path d="M8.5 8.5c1.5 1 5.5 1 7 0" />
+              </svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">Pantau Pohon Desa</h1>
+                <span id="syncStatusBadge" class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full bg-rimba-800 text-rimba-200 border border-rimba-700">
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Menyambungkan Google Sheet...
+                </span>
+              </div>
+              <p class="text-xs text-rimba-200">
+                Monitoring bulanan pohon warga • Tanpa login • Terlacak per kode pohon &amp; wilayah
+              </p>
+            </div>
+          </div>
+
+          <!-- Quick Action on Mobile -->
+          <button
+            type="button"
+            onclick="switchTab('update')"
+            class="md:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rimba-500 hover:bg-rimba-400 text-rimba-950 font-semibold text-xs transition shadow">
+            <span>+ Lapor</span>
+          </button>
+        </div>
+
+        <!-- Main Navigation Tabs -->
+        <nav class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 no-scrollbar" aria-label="Navigasi Utama">
+          <button
+            type="button"
+            id="tab-peta"
+            onclick="switchTab('peta')"
+            class="nav-tab whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-rimba-900 shadow-sm">
+            <span>🗺️</span>
+            <span>Peta &amp; Persebaran</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-update"
+            onclick="switchTab('update')"
+            class="nav-tab whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition flex items-center gap-1.5 text-rimba-100 hover:bg-rimba-800">
+            <span>🌱</span>
+            <span>Update Bulanan</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-riwayat"
+            onclick="switchTab('riwayat')"
+            class="nav-tab whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition flex items-center gap-1.5 text-rimba-100 hover:bg-rimba-800">
+            <span>📋</span>
+            <span>Riwayat &amp; Kualitas</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-panduan"
+            onclick="switchTab('panduan')"
+            class="nav-tab whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition flex items-center gap-1.5 text-rimba-100 hover:bg-rimba-800">
+            <span>⚙️</span>
+            <span>Sheet, Drive &amp; Hosting</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Summary KPI Strip (Always visible above tabs for immediate village overview) -->
+    <section aria-label="Ringkasan Statistik Pohon" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div class="bg-white rounded-2xl p-4 border border-tanah-200/80 shadow-sm">
+        <p class="text-xs font-medium text-stone-500">Total Pohon Terdata</p>
+        <div class="mt-1.5 flex items-baseline justify-between">
+          <span id="statTotalTrees" class="text-2xl font-bold text-rimba-900">0</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-rimba-100 text-rimba-800 font-medium">Aktif</span>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 border border-emerald-200/80 shadow-sm">
+        <p class="text-xs font-medium text-stone-500">Pertumbuhan Baik</p>
+        <div class="mt-1.5 flex items-baseline justify-between">
+          <span id="statBaik" class="text-2xl font-bold text-emerald-700">0</span>
+          <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 border border-amber-200/80 shadow-sm">
+        <p class="text-xs font-medium text-stone-500">Pertumbuhan Cukup</p>
+        <div class="mt-1.5 flex items-baseline justify-between">
+          <span id="statCukup" class="text-2xl font-bold text-amber-600">0</span>
+          <span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 border border-rose-200/80 shadow-sm">
+        <p class="text-xs font-medium text-stone-500">Perlu Perhatian</p>
+        <div class="mt-1.5 flex items-baseline justify-between">
+          <span id="statPerluPerhatian" class="text-2xl font-bold text-rose-600">0</span>
+          <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
+        </div>
+      </div>
+
+      <div class="col-span-2 sm:col-span-1 bg-white rounded-2xl p-4 border border-tanah-200/80 shadow-sm">
+        <p class="text-xs font-medium text-stone-500">Update Bulan Ini</p>
+        <div class="mt-1.5 flex items-baseline justify-between">
+          <span id="statUpdatedThisMonth" class="text-2xl font-bold text-tanah-700">0</span>
+          <span id="currentMonthLabel" class="text-[11px] font-medium text-stone-500">Bulan ini</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 1: PETA & PERSEBARAN POHON                                      -->
+    <!-- ===================================================================== -->
+    <section id="view-peta" class="tab-view space-y-6">
+      <!-- Filter Bar -->
+      <div class="bg-white rounded-2xl p-4 sm:p-5 border border-tanah-200 shadow-sm">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-base sm:text-lg font-bold text-rimba-950">Peta Persebaran &amp; Kualitas Pohon Desa</h2>
+            <p class="text-xs sm:text-sm text-stone-600">
+              Klik pin pohon di peta untuk melihat tinggi terbaru, penanggung jawab, tanggal update, dan foto Google Drive.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Baik
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Cukup
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-800 border border-rose-200 font-medium">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Perlu Perhatian
+            </span>
+          </div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="mt-4 pt-4 border-t border-stone-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label for="filterDusun" class="block text-xs font-semibold text-stone-600 mb-1">Filter Dusun / RT / RW</label>
+            <select id="filterDusun" onchange="renderAllViews()" class="w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500">
+              <option value="ALL">Semua Dusun / RT / RW</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="filterSpecies" class="block text-xs font-semibold text-stone-600 mb-1">Filter Jenis Pohon</label>
+            <select id="filterSpecies" onchange="renderAllViews()" class="w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500">
+              <option value="ALL">Semua Jenis Pohon</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="filterQuality" class="block text-xs font-semibold text-stone-600 mb-1">Kualitas Pertumbuhan</label>
+            <select id="filterQuality" onchange="renderAllViews()" class="w-full rounded-xl border border-stone-300 bg-stone-50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500">
+              <option value="ALL">Semua Kualitas</option>
+              <option value="Baik">Baik (Hijau)</option>
+              <option value="Cukup">Cukup (Kuning)</option>
+              <option value="Perlu Perhatian">Perlu Perhatian (Merah)</option>
+            </select>
+          </div>
+
+          <div class="flex items-end gap-2">
+            <button
+              type="button"
+              onclick="resetFilters()"
+              class="w-full sm:w-auto flex-1 px-4 py-2 rounded-xl border border-stone-300 hover:bg-stone-100 text-stone-700 text-sm font-medium transition">
+              Reset Filter
+            </button>
+            <button
+              type="button"
+              onclick="syncFromGoogleSheet()"
+              class="px-4 py-2 rounded-xl bg-rimba-700 hover:bg-rimba-800 text-white text-sm font-medium transition whitespace-nowrap">
+              ↻ Muat Data
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Map & Selected Tree Detail Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Map Box -->
+        <div class="lg:col-span-2 bg-white rounded-2xl p-3 sm:p-4 border border-tanah-200 shadow-sm">
+          <div class="rounded-xl overflow-hidden border border-stone-200 relative">
+            <div id="mapContainer"></div>
+            <!-- Offline / Map notice banner -->
+            <div id="mapFallbackNotice" class="hidden p-6 text-center bg-tanah-100 text-stone-700">
+              <p class="font-semibold text-rimba-900">Peta interaktif sedang memuat atau jaringan terbatas.</p>
+              <p class="text-xs mt-1">Daftar titik koordinat pohon dan kualitas pertumbuhan tetap tersedia di panel samping dan tab Riwayat.</p>
+            </div>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 px-1">
+            <span>Sumber peta: OpenStreetMap via Leaflet • Koordinat tersimpan per pohon</span>
+            <span id="mapFilteredCount" class="font-semibold text-rimba-800">Menampilkan 0 pohon</span>
+          </div>
+        </div>
+
+        <!-- Selected Tree / Quick Directory Card -->
+        <div class="bg-white rounded-2xl p-4 sm:p-5 border border-tanah-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-bold uppercase tracking-wider text-stone-500">Detail Pohon Terpilih</h3>
+              <button
+                type="button"
+                onclick="switchTab('update')"
+                class="text-xs font-semibold text-rimba-700 hover:text-rimba-900 underline">
+                + Update Bulanan
+              </button>
+            </div>
+
+            <div id="selectedTreeCard" class="rounded-xl bg-tanah-50 border border-tanah-200/80 p-4 space-y-3">
+              <p class="text-sm text-stone-500">Pilih salah satu pin pohon di peta atau daftar di bawah.</p>
+            </div>
+          </div>
+
+          <div class="mt-5 pt-4 border-t border-stone-100">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-stone-500 mb-2.5">Daftar Cepat Pohon</h4>
+            <div id="quickTreeList" class="space-y-2 max-h-52 overflow-y-auto pr-1"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 2: UPDATE BULANAN (TANPA LOGIN, TETAP TERLACAK)                  -->
+    <!-- ===================================================================== -->
+    <section id="view-update" class="tab-view hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Form Column -->
+        <div class="lg:col-span-2 bg-white rounded-2xl p-5 sm:p-6 border border-tanah-200 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 mb-5 border-b border-stone-100">
+            <div>
+              <h2 class="text-lg font-bold text-rimba-950">Form Update Perkembangan Pohon Bulanan</h2>
+              <p class="text-xs sm:text-sm text-stone-600">
+                Tidak perlu akun/login. Gunakan <strong>Kode Pohon</strong> (contoh: <code class="bg-stone-100 px-1.5 py-0.5 rounded">PHN-001</code>) agar riwayat bulanan tetap terlacak.
+              </p>
+            </div>
+            <span class="self-start sm:self-center text-xs font-semibold px-3 py-1 rounded-full bg-rimba-100 text-rimba-800">
+              Terlacak Otomatis
+            </span>
+          </div>
+
+          <!-- Mode Selector: Existing Tree vs New Tree -->
+          <div class="mb-5">
+            <label class="block text-xs font-semibold text-stone-600 mb-2">Jenis Pelaporan</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                id="modeExistingBtn"
+                onclick="setSubmissionMode('existing')"
+                class="p-3.5 rounded-xl border-2 border-rimba-600 bg-rimba-50 text-left transition">
+                <div class="font-bold text-sm text-rimba-950">1. Update Pohon Terdaftar</div>
+                <div class="text-xs text-stone-600 mt-0.5">Pilih pohon yang sudah ada &amp; catat tinggi/kondisi bulan ini.</div>
+              </button>
+
+              <button
+                type="button"
+                id="modeNewBtn"
+                onclick="setSubmissionMode('new')"
+                class="p-3.5 rounded-xl border-2 border-stone-200 bg-white hover:border-stone-300 text-left transition">
+                <div class="font-bold text-sm text-stone-800">2. Daftarkan Pohon Baru + Update Awal</div>
+                <div class="text-xs text-stone-600 mt-0.5">Beri kode pohon baru, jenis, lokasi dusun/RT/RW, &amp; titik koordinat.</div>
+              </button>
+            </div>
+          </div>
+
+          <form id="treeUpdateForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+            <!-- Existing Tree Picker -->
+            <div id="existingTreeSection" class="p-4 rounded-xl bg-rimba-50/70 border border-rimba-200 space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label for="selectExistingTree" class="text-xs font-bold text-rimba-950">
+                  Pilih Pohon Terdaftar (Kode Pohon — Jenis — Lokasi)
+                </label>
+                <span id="selectedExistingCodeBadge" class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-white border border-rimba-200 text-rimba-800">
+                  Kode: -
+                </span>
+              </div>
+              <select
+                id="selectExistingTree"
+                onchange="onExistingTreeChange()"
+                class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-rimba-500">
+              </select>
+              <p id="existingTreeHint" class="text-xs text-stone-600"></p>
+            </div>
+
+            <!-- New Tree Fields (Hidden by default) -->
+            <div id="newTreeSection" class="hidden p-4 rounded-xl bg-tanah-50 border border-tanah-200 space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-tanah-800">Data Pohon Baru</h3>
+                <button
+                  type="button"
+                  onclick="generateNextTreeCode()"
+                  class="text-xs font-semibold text-rimba-700 hover:text-rimba-900 underline">
+                  Generate Kode Otomatis
+                </button>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="caretakerName" class="block text-xs font-semibold text-stone-700 mb-1">
+                Nama Penanggung Jawab / Warga *
+              </label>
+              <input
+                type="text"
+                id="caretakerName"
+                required
+                placeholder="Contoh: Pak Slamet / Ibu Sari"
+                class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+              />
+            </div>
+
+            <div>
+              <label for="reportMonth" class="block text-xs font-semibold text-stone-700 mb-1">
+                Bulan Laporan *
+              </label>
+              <input
+                type="month"
+                id="reportMonth"
+                required
+                class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="heightCm" class="block text-xs font-semibold text-stone-700 mb-1">
+                Tinggi Pohon (cm) *
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="10000"
+                step="1"
+                id="heightCm"
+                required
+                placeholder="Contoh: 145"
+                class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+              />
+            </div>
+
+            <div>
+              <label for="growthQuality" class="block text-xs font-semibold text-stone-700 mb-1">
+                Kualitas Pertumbuhan *
+              </label>
+              <select
+                id="growthQuality"
+                required
+                class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-rimba-500">
+                <option value="Baik">🟢 Baik (Daun segar, tumbuh aktif)</option>
+                <option value="Cukup">🟡 Cukup (Tumbuh lambat / perlu pupuk)</option>
+                <option value="Perlu Perhatian">🔴 Perlu Perhatian (Hama / kering / rusak)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Google Drive Photo Link + Local Camera/Gallery Picker with Auto Compression -->
+          <div class="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <label for="photoFileInput" class="text-xs font-bold text-stone-800">
+                Foto Perkembangan Pohon (Otomatis Terkompres &amp; Masuk Google Drive)
+              </label>
+              <span class="text-[11px] font-medium text-rimba-700">Maks. lebar 1024px • Ringan di sinyal desa</span>
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <input
+                type="file"
+                id="photoFileInput"
+                accept="image/*"
+                capture="environment"
+                onchange="handlePhotoFileSelect(event)"
+                class="block w-full text-xs text-stone-600 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rimba-700 file:text-white hover:file:bg-rimba-800 cursor-pointer"
+              />
+            </div>
+
+            <div id="photoPreviewBox" class="hidden rounded-xl overflow-hidden border border-stone-200 bg-white p-2">
+              <img id="photoPreviewImg" src="" alt="Pratinjau foto pohon" class="w-full max-h-48 object-cover rounded-lg" />
+            </div>
+
+            <p id="photoFileStatus" class="text-[11px] text-stone-500">
+              Pilih foto dari kamera atau galeri HP. Foto akan dikompresi otomatis sebelum dikirim ke Google Drive.
+            </p>
+
+            <details class="text-xs text-stone-600">
+              <summary class="cursor-pointer font-medium text-stone-700 hover:text-rimba-800">
+                Atau tempelkan link foto Google Drive secara manual (opsional)
+              </summary>
+              <input
+                type="url"
+                id="photoDriveUrl"
+                placeholder="https://drive.google.com/file/d/..."
+                class="mt-2 w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+              />
+            </details>
+          </div>
+
+                <div>
+                  <label for="newTreeSpecies" class="block text-xs font-semibold text-stone-700 mb-1">
+                    Jenis Pohon *
+                  </label>
+                  <input
+                    type="text"
+                    id="newTreeSpecies"
+                    list="speciesSuggestions"
+                    placeholder="Contoh: Durian Montong, Mahoni, Trembesi"
+                    class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                  />
+                  <datalist id="speciesSuggestions">
+                    <option value="Durian Montong"></option>
+                    <option value="Mangga Harum Manis"></option>
+                    <option value="Alpukat Miki"></option>
+                    <option value="Mahoni"></option>
+                    <option value="Trembesi"></option>
+                    <option value="Bambu Petung"></option>
+                    <option value="Kelengkeng"></option>
+                  </datalist>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="newTreeDusun" class="block text-xs font-semibold text-stone-700 mb-1">
+                    Lokasi (Dusun / RT / RW) *
+                  </label>
+                  <input
+                    type="text"
+                    id="newTreeDusun"
+                    placeholder="Contoh: Dusun Krajan RT 02 / RW 01"
+                    class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                  />
+                </div>
+
+                <div>
+                  <label for="newTreePlantedDate" class="block text-xs font-semibold text-stone-700 mb-1">
+                    Tanggal Tanam
+                  </label>
+                  <input
+                    type="date"
+                    id="newTreePlantedDate"
+                    class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div>
+                  <label for="newTreeLat" class="block text-xs font-semibold text-stone-700 mb-1">Latitude (Lintang)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    id="newTreeLat"
+                    placeholder="-7.7956"
+                    class="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                  />
+                </div>
+                <div>
+                  <label for="newTreeLng" class="block text-xs font-semibold text-stone-700 mb-1">Longitude (Bujur)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    id="newTreeLng"
+                    placeholder="110.3695"
+                    class="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onclick="useCurrentGPS()"
+                  class="px-3 py-2 rounded-xl bg-tanah-700 hover:bg-tanah-800 text-white text-xs font-semibold transition">
+                  📍 Ambil Lokasi GPS HP
+                </button>
+              </div>
+            </div>
+
+            <!-- Common Monthly Update Fields -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label for="caretakerName" class="block text-xs font-semibold text-stone-700 mb-1">
+                  Nama Penanggung Jawab / Warga *
+                </label>
+                <input
+                  type="text"
+                  id="caretakerName"
+                  required
+                  placeholder="Contoh: Pak Slamet / Ibu Sari"
+                  class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                />
+              </div>
+
+              <div>
+                <label for="updateDate" class="block text-xs font-semibold text-stone-700 mb-1">
+                  Tanggal Update Bulanan *
+                </label>
+                <input
+                  type="date"
+                  id="updateDate"
+                  required
+                  class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label for="heightCm" class="block text-xs font-semibold text-stone-700 mb-1">
+                  Tinggi Pohon (cm) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10000"
+                  step="1"
+                  id="heightCm"
+                  required
+                  placeholder="Contoh: 145"
+                  class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                />
+              </div>
+
+              <div>
+                <label for="trunkCm" class="block text-xs font-semibold text-stone-700 mb-1">
+                  Lingkar Batang (cm, opsional)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="5000"
+                  step="0.5"
+                  id="trunkCm"
+                  placeholder="Contoh: 18"
+                  class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+                />
+              </div>
+
+              <div>
+                <label for="growthQuality" class="block text-xs font-semibold text-stone-700 mb-1">
+                  Kualitas Pertumbuhan *
+                </label>
+                <select
+                  id="growthQuality"
+                  required
+                  class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-rimba-500">
+                  <option value="Baik">🟢 Baik (Daun segar, tumbuh aktif)</option>
+                  <option value="Cukup">🟡 Cukup (Tumbuh lambat / perlu pupuk)</option>
+                  <option value="Perlu Perhatian">🔴 Perlu Perhatian (Hama / kering / rusak)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Google Drive Photo Link + Optional Local File Picker for Drive Upload -->
+            <div class="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <label for="photoDriveUrl" class="text-xs font-bold text-stone-800">
+                  Foto Pohon (Link Google Drive atau Pilih File Foto)
+                </label>
+                <button
+                  type="button"
+                  onclick="switchTab('panduan')"
+                  class="text-xs font-semibold text-rimba-700 hover:underline">
+                  Cara simpan otomatis ke Google Drive →
+                </button>
+              </div>
+
+              <input
+                type="url"
+                id="photoDriveUrl"
+                placeholder="https://drive.google.com/file/d/..."
+                class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+              />
+
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                <label class="inline-flex items-center gap-2 text-xs font-medium text-stone-700 cursor-pointer">
+                  <input
+                    type="file"
+                    id="photoFileInput"
+                    accept="image/*"
+                    capture="environment"
+                    onchange="handlePhotoFileSelect(event)"
+                    class="block w-full text-xs text-stone-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-rimba-100 file:text-rimba-800 hover:file:bg-rimba-200"
+                  />
+                </label>
+                <span id="photoFileStatus" class="text-[11px] text-stone-500">
+                  Jika Google Apps Script terhubung, foto dikirim ke folder Google Drive.
+                </span>
+              </div>
+            </div>
+
+            <!-- Notes -->
+            <div>
+              <label for="conditionNotes" class="block text-xs font-semibold text-stone-700 mb-1">
+                Catatan Kondisi &amp; Perawatan Bulan Ini
+              </label>
+              <textarea
+                id="conditionNotes"
+                rows="3"
+                placeholder="Contoh: Sudah disiram rutin pagi & sore, diberi kompos kandang 2 kg, tunas baru muncul di pucuk."
+                class="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+              ></textarea>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <p class="text-xs text-stone-500">
+                Data tersimpan di perangkat ini &amp; dikirim ke Google Sheet bila Web App URL sudah diatur.
+              </p>
+              <button
+                type="submit"
+                id="submitUpdateBtn"
+                class="px-6 py-3 rounded-xl bg-rimba-700 hover:bg-rimba-800 active:scale-[0.99] text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2">
+                <span>💾</span>
+                <span>Simpan Update Bulanan</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Side Helper Column -->
+        <div class="space-y-4">
+          <div class="bg-white rounded-2xl p-5 border border-tanah-200 shadow-sm">
+            <h3 class="text-sm font-bold text-rimba-950 mb-2">Mengapa Tanpa Login Tetap Terlacak?</h3>
+            <ul class="space-y-2.5 text-xs text-stone-600 leading-relaxed">
+              <li class="flex items-start gap-2">
+                <span class="font-bold text-rimba-700">1.</span>
+                <span>Setiap pohon memiliki <strong>Kode Pohon unik</strong> (mis. <code class="bg-stone-100 px-1 rounded">PHN-001</code>) yang dapat dicetak di label/papan kecil di pohon atau dicatat warga.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="font-bold text-rimba-700">2.</span>
+                <span>Setiap kiriman mencatat <strong>Nama Warga</strong>, <strong>Tanggal Update</strong>, <strong>Tinggi</strong>, dan <strong>Kualitas Pertumbuhan</strong> sehingga membentuk garis waktu bulanan.</span>
+              </li>
+              <li class="flex items-start gap-2">
+                <span class="font-bold text-rimba-700">3.</span>
+                <span>Warga cukup buka tautan website di HP tanpa lupa password atau membuat akun baru.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="bg-rimba-900 text-white rounded-2xl p-5 shadow-sm">
+            <h3 class="text-sm font-bold text-rimba-200 mb-1.5">Standar Penilaian Kualitas</h3>
+            <div class="space-y-2.5 text-xs mt-3">
+              <div class="p-2.5 rounded-xl bg-rimba-800/80 border border-rimba-700">
+                <span class="font-bold text-emerald-300">● Baik:</span> Daun hijau sehat, batang kokoh, ada pertumbuhan tinggi/tunas.
+              </div>
+              <div class="p-2.5 rounded-xl bg-rimba-800/80 border border-rimba-700">
+                <span class="font-bold text-amber-300">● Cukup:</span> Pertumbuhan melambat atau tanah agak kering, butuh pemupukan/penyiraman rutin.
+              </div>
+              <div class="p-2.5 rounded-xl bg-rimba-800/80 border border-rimba-700">
+                <span class="font-bold text-rose-300">● Perlu Perhatian:</span> Terserang hama, daun menguning/layu, atau batang terganggu.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 3: RIWAYAT & KUALITAS PERTUMBUHAN                                -->
+    <!-- ===================================================================== -->
+    <section id="view-riwayat" class="tab-view hidden space-y-6">
+      <!-- Analytics / Charts Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-2xl p-5 border border-tanah-200 shadow-sm">
+          <h3 class="text-base font-bold text-rimba-950">Komposisi Kualitas Pertumbuhan</h3>
+          <p class="text-xs text-stone-500 mb-4">Berdasarkan status pertumbuhan terbaru tiap pohon</p>
+          <div class="h-60 flex items-center justify-center">
+            <canvas id="qualityChartCanvas"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border border-tanah-200 shadow-sm">
+          <h3 class="text-base font-bold text-rimba-950">Rata-Rata Tinggi Pohon per Dusun (cm)</h3>
+          <p class="text-xs text-stone-500 mb-4">Perbandingan tinggi terkini antar wilayah dusun/RT/RW</p>
+          <div class="h-60 flex items-center justify-center">
+            <canvas id="dusunHeightChartCanvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search & Tracking Filter Box -->
+      <div class="bg-white rounded-2xl p-5 border border-tanah-200 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 class="text-lg font-bold text-rimba-950">Pelacakan Kode Pohon &amp; Riwayat Update Bulanan</h2>
+            <p class="text-xs sm:text-sm text-stone-600">
+              Cari berdasarkan <strong>Kode Pohon</strong> (mis. <code class="bg-stone-100 px-1 rounded">PHN-001</code>), nama warga, jenis pohon, atau dusun.
+            </p>
+          </div>
+          <button
+            type="button"
+            onclick="exportFilteredCSV()"
+            class="self-start sm:self-center px-3.5 py-2 rounded-xl bg-tanah-100 hover:bg-tanah-200 text-tanah-900 text-xs font-bold border border-tanah-300 transition">
+            ⬇ Unduh CSV Rekap
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="sm:col-span-2">
+            <label for="searchTrackingInput" class="block text-xs font-semibold text-stone-600 mb-1">
+              Cari Kode Pohon / Nama Warga / Lokasi
+            </label>
+            <input
+              type="text"
+              id="searchTrackingInput"
+              oninput="renderHistoryList()"
+              placeholder="Ketik PHN-001, nama warga, durian, atau dusun..."
+              class="w-full rounded-xl border border-stone-300 bg-stone-50 px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500"
+            />
+          </div>
+
+          <div>
+            <label for="historyQualityFilter" class="block text-xs font-semibold text-stone-600 mb-1">
+              Filter Kualitas
+            </label>
+            <select
+              id="historyQualityFilter"
+              onchange="renderHistoryList()"
+              class="w-full rounded-xl border border-stone-300 bg-stone-50 px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rimba-500">
+              <option value="ALL">Semua Kualitas</option>
+              <option value="Baik">Baik</option>
+              <option value="Cukup">Cukup</option>
+              <option value="Perlu Perhatian">Perlu Perhatian</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tree Cards with Monthly Timeline -->
+      <div id="trackingCardsContainer" class="space-y-4"></div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- VIEW 4: PANDUAN GOOGLE SHEET + GOOGLE DRIVE + HOSTING GRATIS          -->
+    <!-- ===================================================================== -->
+    <section id="view-panduan" class="tab-view hidden space-y-6">
+      <!-- Live Connection Settings Card -->
+      <div class="bg-white rounded-2xl p-5 sm:p-6 border border-tanah-200 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-rimba-950">Koneksi Google Sheet &amp; Google Drive (Web App URL)</h2>
+            <p class="text-xs sm:text-sm text-stone-600">
+              Website ini sudah terhubung langsung secara default ke Web App Google Apps Script desa Anda. Warga tidak perlu mengatur apa pun.
+            </p>
+          </div>
+          <span id="connectionDetailBadge" class="self-start sm:self-center text-xs font-semibold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+            API Aktif
+          </span>
+        </div>
+
+        <div>
+          <label for="gasWebAppUrlInput" class="block text-xs font-semibold text-stone-700 mb-1">
+            Google Apps Script Web App URL (Aktif)
+          </label>
+          <input
+            type="url"
+            id="gasWebAppUrlInput"
+            placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
+            class="w-full rounded-xl border border-stone-300 bg-stone-50 px-3.5 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rimba-500"
+          />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onclick="saveBackendConfig()"
+            class="px-5 py-2.5 rounded-xl bg-rimba-700 hover:bg-rimba-800 text-white text-sm font-semibold transition">
+            Simpan URL Kustom
+          </button>
+          <button
+            type="button"
+            onclick="resetToDefaultScriptUrl()"
+            class="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 hover:bg-stone-100 text-sm font-semibold transition">
+            Gunakan URL Default Desa
+          </button>
+          <button
+            type="button"
+            onclick="syncFromGoogleSheet(false)"
+            class="px-4 py-2.5 rounded-xl border border-rimba-700 text-rimba-800 hover:bg-rimba-50 text-sm font-semibold transition">
+            ↻ Uji Koneksi &amp; Sinkronisasi Ulang
+          </button>
+          <button
+            type="button"
+            onclick="restoreDefaultSampleData()"
+            class="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-600 hover:bg-stone-100 text-xs font-semibold transition ml-auto">
+            Muat Data Demo Lokal
+          </button>
+        </div>
+      </div>
+
+      <!-- Step-by-Step Setup & Copyable Google Apps Script -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-white rounded-2xl p-5 sm:p-6 border border-tanah-200 shadow-sm space-y-4">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h3 class="text-base font-bold text-rimba-950">Kode Google Apps Script (<code class="font-mono text-sm">Kode.gs</code>)</h3>
+              <p class="text-xs text-stone-500">Kode backend yang sudah disinkronkan dengan struktur kolom <code class="font-mono">Log_Pohon</code> dan upload foto Google Drive.</p>
+            </div>
+            <button
+              type="button"
+              onclick="copyAppsScriptCode()"
+              class="px-3.5 py-2 rounded-xl bg-rimba-100 hover:bg-rimba-200 text-rimba-900 text-xs font-bold transition">
+              📋 Salin Kode.gs
+            </button>
+          </div>
+
+          <div class="rounded-xl bg-stone-900 text-stone-100 p-4 overflow-x-auto max-h-96">
+            <pre><code id="appsScriptCodeBlock">const FOLDER_ID = 'GANTI_DENGAN_ID_FOLDER_GOOGLE_DRIVE';
+const SHEET_NAME = 'Log_Pohon';
+
+function doGet(e) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getOrCreateSheet_(ss, SHEET_NAME);
+    const values = sheet.getDataRange().getValues();
+
+    if (values.length &lt;= 1) {
+      return jsonResponse_({ ok: true, data: [] });
+    }
+
+    const headers = values[0].map(function (h) {
+      return String(h || '').trim();
+    });
+
+    const rows = [];
+    for (let i = 1; i &lt; values.length; i++) {
+      const row = values[i];
+      const hasContent = row.some(function (cell) {
+        return cell !== '' &amp;&amp; cell !== null;
+      });
+      if (!hasContent) continue;
+
+      const obj = {};
+      for (let j = 0; j &lt; headers.length; j++) {
+        obj[headers[j]] = row[j];
+      }
+      rows.push(obj);
+    }
+
+    return jsonResponse_({ ok: true, data: rows });
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: err.message });
+  }
+}
+
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return jsonResponse_({ ok: false, error: 'Payload kosong' });
+    }
+
+    const payload = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getOrCreateSheet_(ss, SHEET_NAME);
+
+    let fotoUrl = String(payload.fotoUrl || payload.Foto_URL || '').trim();
+
+    if (payload.fotoBase64 &amp;&amp; String(payload.fotoBase64).indexOf('base64,') !== -1) {
+      fotoUrl = saveBase64ToDrive_(
+        payload.fotoBase64,
+        payload.kodePohon || payload.Kode_Pohon || 'POHON',
+        payload.namaFile || 'foto.jpg'
+      );
+    }
+
+    const now = new Date();
+    const bulanLaporan =
+      payload.bulanLaporan ||
+      payload.Bulan_Laporan ||
+      Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM');
+
+    const rowData = [
+      now,
+      String(payload.kodePohon || payload.Kode_Pohon || '').trim(),
+      String(payload.namaWarga || payload.Nama_Warga || '').trim(),
+      String(payload.wilayah || payload.Wilayah || '').trim(),
+      String(payload.jenisPohon || payload.Jenis_Pohon || '').trim(),
+      Number(payload.latitude || payload.Latitude || 0) || '',
+      Number(payload.longitude || payload.Longitude || 0) || '',
+      Number(payload.tinggiCm || payload.Tinggi_cm || 0) || '',
+      String(payload.kualitas || payload.Kualitas || 'Baik').trim(),
+      String(payload.catatan || payload.Catatan || '').trim(),
+      fotoUrl,
+      String(bulanLaporan).trim()
+    ];
+
+    sheet.appendRow(rowData);
+
+    return jsonResponse_({
+      ok: true,
+      message: 'Data berhasil disimpan',
+      fotoUrl: fotoUrl
+    });
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: err.message });
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onclick="saveBackendConfig()"
+            class="px-5 py-2.5 rounded-xl bg-rimba-700 hover:bg-rimba-800 text-white text-sm font-semibold transition">
+            Simpan Konfigurasi
+          </button>
+          <button
+            type="button"
+            onclick="syncFromGoogleSheet()"
+            class="px-4 py-2.5 rounded-xl border border-rimba-700 text-rimba-800 hover:bg-rimba-50 text-sm font-semibold transition">
+            Uji Tarik Data (doGet)
+          </button>
+          <button
+            type="button"
+            onclick="restoreDefaultSampleData()"
+            class="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-600 hover:bg-stone-100 text-xs font-semibold transition ml-auto">
+            Pulihkan Data Contoh Desa
+          </button>
+        </div>
+      </div>
+
+      <!-- Step-by-Step Setup & Copyable Google Apps Script -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-white rounded-2xl p-5 sm:p-6 border border-tanah-200 shadow-sm space-y-4">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h3 class="text-base font-bold text-rimba-950">Kode Google Apps Script (Sheet + Drive)</h3>
+              <p class="text-xs text-stone-500">Salin kode ini ke <strong>Extensions → Apps Script</strong> di Google Sheet Anda.</p>
+            </div>
+            <button
+              type="button"
+              onclick="copyAppsScriptCode()"
+              class="px-3.5 py-2 rounded-xl bg-rimba-100 hover:bg-rimba-200 text-rimba-900 text-xs font-bold transition">
+              📋 Salin Kode
+            </button>
+          </div>
+
+          <div class="rounded-xl bg-stone-900 text-stone-100 p-4 overflow-x-auto max-h-96">
+            <pre><code id="appsScriptCodeBlock">function doGet(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = getOrCreateSheet_(ss, "Pohon_Updates");
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length &lt;= 1) {
+    return jsonResponse_({ ok: true, records: [] });
+  }
+  const headers = rows[0];
+  const records = rows.slice(1).map((r) => {
+    const obj = {};
+    headers.forEach((h, idx) =&gt; { obj[h] = r[idx]; });
+    return obj;
+  });
+  return jsonResponse_({ ok: true, records: records });
+}
+
+function doPost(e) {
+  try {
+    const payload = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = getOrCreateSheet_(ss, "Pohon_Updates");
+
+    let photoUrl = payload.photoDriveUrl || "";
+
+    // Jika warga mengirim foto base64, simpan otomatis ke Google Drive
+    if (payload.photoBase64 &amp;&amp; payload.photoFileName) {
+      const folderId = payload.gdriveFolderId || "";
+      const folder = folderId
+        ? DriveApp.getFolderById(folderId)
+        : getOrCreateFolder_("Pantau_Pohon_Desa_Foto");
+
+      const parts = payload.photoBase64.split(",");
+      const mimeMatch = parts[0].match(/data:(.*);base64/);
+      const mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      const decoded = Utilities.base64Decode(parts[1]);
+      const blob = Utilities.newBlob(decoded, mimeType, payload.treeCode + "_" + payload.photoFileName);
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Access.VIEW);
+      photoUrl = "https://drive.google.com/uc?export=view&amp;id=" + file.getId();
+    }
+
+    const row = [
+      new Date().toISOString(),
+      payload.treeCode || "",
+      payload.species || "",
+      payload.dusun || "",
+      payload.lat || "",
+      payload.lng || "",
+      payload.plantedDate || "",
+      payload.caretakerName || "",
+      payload.updateDate || "",
+      Number(payload.heightCm || 0),
+      payload.trunkCm || "",
+      payload.growthQuality || "Baik",
+      payload.conditionNotes || "",
+      photoUrl
+    ];
+
+    sheet.appendRow(row);
+    return jsonResponse_({ ok: true, photoUrl: photoUrl });
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: err.message });
+  }
+}
+
+function getOrCreateSheet_(ss, name) {
+  let sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    sh.appendRow([
+      "timestamp_server", "treeCode", "species", "dusun", "lat", "lng",
+      "plantedDate", "caretakerName", "updateDate", "heightCm", "trunkCm",
+      "growthQuality", "conditionNotes", "photoDriveUrl"
+    ]);
+  }
+  return sh;
+}
+
+function getOrCreateFolder_(name) {
+  const iter = DriveApp.getFoldersByName(name);
+  return iter.hasNext() ? iter.next() : DriveApp.createFolder(name);
+}
+
+function jsonResponse_(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}</code></pre>
+          </div>
+
+          <ol class="list-decimal list-inside space-y-2 text-xs sm:text-sm text-stone-700 pt-1">
+            <li>Buat <strong>Google Sheet baru</strong> di akun Google desa/pengelola, lalu buka menu <strong>Extensions &gt; Apps Script</strong>.</li>
+            <li>Tempelkan kode di atas, klik <strong>Save</strong>, lalu klik <strong>Deploy &gt; New deployment</strong> (pilih tipe <strong>Web app</strong>, <em>Execute as: Me</em>, <em>Who has access: Anyone</em>).</li>
+            <li>Salin URL Web App yang muncul dan tempelkan ke kolom di atas.</li>
+          </ol>
+        </div>
+
+        <!-- Free Sustainable Hosting Guide -->
+        <div class="bg-white rounded-2xl p-5 sm:p-6 border border-tanah-200 shadow-sm space-y-4">
+          <h3 class="text-base font-bold text-rimba-950">Hosting Gratis &amp; Minim Perawatan</h3>
+          <p class="text-xs text-stone-600 leading-relaxed">
+            Karena aplikasi ini berupa satu berkas HTML statis yang membaca/menulis ke Google Sheet, biaya server bulanan bisa <strong>Rp 0</strong> dan sangat awet:
+          </p>
+
+          <div class="space-y-3 text-xs">
+            <div class="p-3.5 rounded-xl bg-rimba-50 border border-rimba-200">
+              <div class="font-bold text-rimba-950">1. GitHub Pages (Paling Populer &amp; Awet)</div>
+              <p class="text-stone-600 mt-1">
+                Simpan berkas <code class="bg-white px-1 rounded border">index.html</code> di repositori publik GitHub, aktifkan GitHub Pages. Gratis selamanya untuk situs statis, HTTPS otomatis.
+              </p>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-tanah-50 border border-tanah-200">
+              <div class="font-bold text-tanah-900">2. Cloudflare Pages</div>
+              <p class="text-stone-600 mt-1">
+                CDN global cepat, gratis, tanpa perlu kelola server/VPS, dan mudah dihubungkan dengan domain desa bila suatu saat tersedia.
+              </p>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-stone-50 border border-stone-200">
+              <div class="font-bold text-stone-800">3. Tips Minim Perawatan</div>
+              <p class="text-stone-600 mt-1">
+                Tidak ada database berbayar atau pembaruan server rutin. Semua catatan warga aman di Google Sheet dan foto terarsip rapi di Google Drive.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-tanah-200 mt-10 py-5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-stone-500">
+      <span><strong>Pantau Pohon Desa</strong> • Sistem pelaporan warga terbuka &amp; terlacak</span>
+      <span>Database: Google Sheet &amp; Google Drive • Hosting Statis Gratis</span>
+    </div>
+  </footer>
+
+  <!-- Application JavaScript -->
+  <script>
+    /**
+     * KONFIGURASI UTAMA GOOGLE APPS SCRIPT WEB APP
+     * Terhubung otomatis saat warga membuka halaman tanpa perlu pengaturan manual.
+     */
+    const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyzeI3vRUZjbOqYFANzeiw0jmxb60ulvOBneRihjbcwYt9ZxoGYcrCKBTva1gUeb429/exec';
+
+    const STORAGE_KEYS = {
+      RECORDS: 'pantau_pohon_desa_records_v2',
+      CUSTOM_URL: 'pantau_pohon_desa_custom_url_v2',
+    };
+
+    // Data demo cadangan jika Google Sheet masih kosong atau perangkat sedang offline
+    const DEFAULT_RECORDS = [
+      {
+        id: 'upd-101',
+        treeCode: 'PHN-001',
+        species: 'Durian Montong',
+        dusun: 'Dusun Krajan RT 01 / RW 01',
+        lat: -7.7924,
+        lng: 110.3658,
+        plantedDate: '2025-05-10',
+        caretakerName: 'Pak Slamet Riyadi',
+        updateDate: '2026-09',
+        heightCm: 112,
+        growthQuality: 'Baik',
+        conditionNotes: 'Tunas baru tumbuh subur setelah pemupukan kompos.',
+        photoDriveUrl: 'https://placehold.co/600x360/e1f6e8/1b482f?text=PHN-001+Durian+Montong+(112+cm)'
+      },
+      {
+        id: 'upd-102',
+        treeCode: 'PHN-001',
+        species: 'Durian Montong',
+        dusun: 'Dusun Krajan RT 01 / RW 01',
+        lat: -7.7924,
+        lng: 110.3658,
+        plantedDate: '2025-05-10',
+        caretakerName: 'Pak Slamet Riyadi',
+        updateDate: '2026-10',
+        heightCm: 128,
+        growthQuality: 'Baik',
+        conditionNotes: 'Daun hijau mengkilap, penyiraman rutin tiap sore.',
+        photoDriveUrl: 'https://placehold.co/600x360/e1f6e8/1b482f?text=PHN-001+Durian+Okt+(128+cm)'
+      },
+      {
+        id: 'upd-103',
+        treeCode: 'PHN-001',
+        species: 'Durian Montong',
+        dusun: 'Dusun Krajan RT 01 / RW 01',
+        lat: -7.7924,
+        lng: 110.3658,
+        plantedDate: '2025-05-10',
+        caretakerName: 'Pak Slamet Riyadi',
+        updateDate: '2026-11',
+        heightCm: 142,
+        growthQuality: 'Baik',
+        conditionNotes: 'Pertumbuhan sangat baik, pagar pelindung kambing diperkuat.',
+        photoDriveUrl: 'https://placehold.co/600x360/e1f6e8/1b482f?text=PHN-001+Durian+Nov+(142+cm)'
+      },
+      {
+        id: 'upd-201',
+        treeCode: 'PHN-002',
+        species: 'Alpukat Miki',
+        dusun: 'Dusun Sumberasih RT 03 / RW 02',
+        lat: -7.7972,
+        lng: 110.3721,
+        plantedDate: '2025-06-02',
+        caretakerName: 'Bu Sari Wulandari',
+        updateDate: '2026-11',
+        heightCm: 114,
+        growthQuality: 'Cukup',
+        conditionNotes: 'Sudah diberi pupuk organik cair, mulai muncul daun muda.',
+        photoDriveUrl: 'https://placehold.co/600x360/fef3c7/92400e?text=PHN-002+Alpukat+Nov+(114+cm)'
+      },
+      {
+        id: 'upd-301',
+        treeCode: 'PHN-003',
+        species: 'Mahoni',
+        dusun: 'Dusun Lembah Hijau RT 02 / RW 03',
+        lat: -7.7885,
+        lng: 110.3748,
+        plantedDate: '2025-03-20',
+        caretakerName: 'Mas Hendro Prasetyo',
+        updateDate: '2026-11',
+        heightCm: 195,
+        growthQuality: 'Baik',
+        conditionNotes: 'Pohon peneduh jalan desa berdiri tegak dan sehat.',
+        photoDriveUrl: 'https://placehold.co/600x360/e1f6e8/1b482f?text=PHN-003+Mahoni+(195+cm)'
+      },
+      {
+        id: 'upd-401',
+        treeCode: 'PHN-004',
+        species: 'Mangga Harum Manis',
+        dusun: 'Dusun Krajan RT 02 / RW 01',
+        lat: -7.7949,
+        lng: 110.3622,
+        plantedDate: '2025-07-11',
+        caretakerName: 'Pak Bambang Santoso',
+        updateDate: '2026-11',
+        heightCm: 88,
+        growthQuality: 'Perlu Perhatian',
+        conditionNotes: 'Bercak daun pada beberapa helai, perlu penyemprotan nabati.',
+        photoDriveUrl: 'https://placehold.co/600x360/ffe4e6/9f1239?text=PHN-004+Mangga+(Perlu+Perhatian)'
+      }
+    ];
+
+    // State aplikasi
+    let records = [];
+    let activeScriptUrl = DEFAULT_SCRIPT_URL;
+    let isConnectedToSheet = false;
+    let submissionMode = 'existing';
+    let selectedTreeCode = null;
+    let compressedPhotoBase64 = '';
+    let compressedPhotoFileName = '';
+
+    // Instance Peta & Grafik
+    let mapInstance = null;
+    let markersLayer = null;
+    let qualityChartInstance = null;
+    let dusunChartInstance = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadStateFromStorage();
+      initDefaultDates();
+      initMap();
+      renderAllViews();
+      populateConfigInputs();
+      syncFromGoogleSheet(true);
+    });
+
+    function loadStateFromStorage() {
+      try {
+        const savedUrl = localStorage.getItem(STORAGE_KEYS.CUSTOM_URL);
+        if (savedUrl && savedUrl.trim()) {
+          activeScriptUrl = savedUrl.trim();
+        } else {
+          activeScriptUrl = DEFAULT_SCRIPT_URL;
+        }
+      } catch (err) {
+        activeScriptUrl = DEFAULT_SCRIPT_URL;
+      }
+
+      try {
+        const rawRecords = localStorage.getItem(STORAGE_KEYS.RECORDS);
+        if (rawRecords) {
+          const parsed = JSON.parse(rawRecords);
+          records = Array.isArray(parsed) && parsed.length > 0 ? parsed : [...DEFAULT_RECORDS];
+        } else {
+          records = [...DEFAULT_RECORDS];
+        }
+      } catch (err) {
+        records = [...DEFAULT_RECORDS];
+      }
+    }
+
+    function saveRecordsToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEYS.RECORDS, JSON.stringify(records));
+      } catch (err) {
+        console.warn('Gagal menyimpan cache lokal:', err);
+      }
+    }
+
+    function initDefaultDates() {
+      const now = new Date();
+      const ymStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const todayStr = now.toISOString().split('T')[0];
+
+      const reportMonthEl = document.getElementById('reportMonth');
+      const plantedDateEl = document.getElementById('newTreePlantedDate');
+      if (reportMonthEl && !reportMonthEl.value) reportMonthEl.value = ymStr;
+      if (plantedDateEl && !plantedDateEl.value) plantedDateEl.value = todayStr;
+
+      const monthNames = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      ];
+      const labelEl = document.getElementById('currentMonthLabel');
+      if (labelEl) {
+        labelEl.textContent = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+      }
+    }
+
+    // Tab Navigation
+    function switchTab(tabName) {
+      const tabs = ['peta', 'update', 'riwayat', 'panduan'];
+      tabs.forEach((t) => {
+        const viewEl = document.getElementById(`view-${t}`);
+        const btnEl = document.getElementById(`tab-${t}`);
+        if (viewEl) {
+          viewEl.classList.toggle('hidden', t !== tabName);
+        }
+        if (btnEl) {
+          if (t === tabName) {
+            btnEl.className = 'nav-tab whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-1.5 bg-white text-rimba-900 shadow-sm';
+          } else {
+            btnEl.className = 'nav-tab whitespace-nowrap px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition flex items-center gap-1.5 text-rimba-100 hover:bg-rimba-800';
+          }
+        }
+      });
+
+      if (tabName === 'peta' && mapInstance) {
+        setTimeout(() => {
+          mapInstance.invalidateSize();
+        }, 120);
+      } else if (tabName === 'riwayat') {
+        renderCharts();
+        renderHistoryList();
+      } else if (tabName === 'update') {
+        populateExistingTreeSelect();
+      }
+    }
+
+    // Group records by treeCode and return latest update + history array
+    function getGroupedTrees(sourceRecords = records) {
+      const map = new Map();
+
+      const sorted = [...sourceRecords].sort((a, b) => {
+        const valA = String(a.updateDate || '');
+        const valB = String(b.updateDate || '');
+        return valA.localeCompare(valB);
+      });
+
+      sorted.forEach((rec) => {
+        const code = (rec.treeCode || '').trim().toUpperCase();
+        if (!code) return;
+
+        if (!map.has(code)) {
+          map.set(code, {
+            treeCode: code,
+            species: rec.species || 'Jenis Pohon',
+            dusun: rec.dusun || 'Wilayah Desa',
+            lat: parseFloat(rec.lat) || -7.7924,
+            lng: parseFloat(rec.lng) || 110.3658,
+            plantedDate: rec.plantedDate || '-',
+            history: [],
+            latest: null
+          });
+        }
+
+        const entry = map.get(code);
+        entry.history.push({ ...rec, treeCode: code });
+        entry.latest = { ...rec, treeCode: code };
+        if (rec.species) entry.species = rec.species;
+        if (rec.dusun) entry.dusun = rec.dusun;
+        if (rec.lat && !Number.isNaN(parseFloat(rec.lat))) entry.lat = parseFloat(rec.lat);
+        if (rec.lng && !Number.isNaN(parseFloat(rec.lng))) entry.lng = parseFloat(rec.lng);
+      });
+
+      return Array.from(map.values()).sort((a, b) => a.treeCode.localeCompare(b.treeCode));
+    }
+
+    function getFilteredTrees() {
+      const dusunVal = document.getElementById('filterDusun')?.value || 'ALL';
+      const speciesVal = document.getElementById('filterSpecies')?.value || 'ALL';
+      const qualityVal = document.getElementById('filterQuality')?.value || 'ALL';
+
+      return getGroupedTrees().filter((tree) => {
+        const matchDusun = dusunVal === 'ALL' || tree.dusun === dusunVal;
+        const matchSpecies = speciesVal === 'ALL' || tree.species === speciesVal;
+        const matchQuality = qualityVal === 'ALL' || (tree.latest && tree.latest.growthQuality === qualityVal);
+        return matchDusun && matchSpecies && matchQuality;
+      });
+    }
+
+    function resetFilters() {
+      const d = document.getElementById('filterDusun');
+      const s = document.getElementById('filterSpecies');
+      const q = document.getElementById('filterQuality');
+      if (d) d.value = 'ALL';
+      if (s) s.value = 'ALL';
+      if (q) q.value = 'ALL';
+      renderAllViews();
+    }
+
+    function populateFilterOptions() {
+      const trees = getGroupedTrees();
+      const dusunSelect = document.getElementById('filterDusun');
+      const speciesSelect = document.getElementById('filterSpecies');
+
+      const prevDusun = dusunSelect ? dusunSelect.value : 'ALL';
+      const prevSpecies = speciesSelect ? speciesSelect.value : 'ALL';
+
+      const dusuns = [...new Set(trees.map((t) => t.dusun).filter(Boolean))].sort();
+      const speciesList = [...new Set(trees.map((t) => t.species).filter(Boolean))].sort();
+
+      if (dusunSelect) {
+        dusunSelect.innerHTML = '<option value="ALL">Semua Dusun / RT / RW</option>' +
+          dusuns.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+        dusunSelect.value = dusuns.includes(prevDusun) ? prevDusun : 'ALL';
+      }
+
+      if (speciesSelect) {
+        speciesSelect.innerHTML = '<option value="ALL">Semua Jenis Pohon</option>' +
+          speciesList.map((sp) => `<option value="${escapeHtml(sp)}">${escapeHtml(sp)}</option>`).join('');
+        speciesSelect.value = speciesList.includes(prevSpecies) ? prevSpecies : 'ALL';
+      }
+    }
+
+    function renderStats() {
+      const allTrees = getGroupedTrees();
+      let baik = 0;
+      let cukup = 0;
+      let perluPerhatian = 0;
+
+      allTrees.forEach((t) => {
+        const q = t.latest?.growthQuality;
+        if (q === 'Baik') baik += 1;
+        else if (q === 'Cukup') cukup += 1;
+        else if (q === 'Perlu Perhatian') perluPerhatian += 1;
+      });
+
+      const now = new Date();
+      const currentYM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const updatedThisMonthCount = records.filter((r) => (r.updateDate || '').startsWith(currentYM)).length;
+
+      document.getElementById('statTotalTrees').textContent = allTrees.length;
+      document.getElementById('statBaik').textContent = baik;
+      document.getElementById('statCukup').textContent = cukup;
+      document.getElementById('statPerluPerhatian').textContent = perluPerhatian;
+      document.getElementById('statUpdatedThisMonth').textContent = updatedThisMonthCount;
+    }
+
+    // Initialize Leaflet Map
+    function initMap() {
+      const mapEl = document.getElementById('mapContainer');
+      const fallbackEl = document.getElementById('mapFallbackNotice');
+
+      if (typeof L === 'undefined' || !mapEl) {
+        if (fallbackEl) fallbackEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        mapInstance = L.map('mapContainer', {
+          center: [-7.793, 110.368],
+          zoom: 14,
+          scrollWheelZoom: true
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(mapInstance);
+
+        markersLayer = L.layerGroup().addTo(mapInstance);
+      } catch (err) {
+        console.error('Error inisialisasi peta:', err);
+        if (fallbackEl) fallbackEl.classList.remove('hidden');
+      }
+    }
+
+    function getQualityColorHex(quality) {
+      if (quality === 'Baik') return '#10b981'; // emerald-500
+      if (quality === 'Cukup') return '#f59e0b'; // amber-500
+      return '#f43f5e'; // rose-500
+    }
+
+    function getQualityBadgeClasses(quality) {
+      if (quality === 'Baik') {
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      }
+      if (quality === 'Cukup') {
+        return 'bg-amber-100 text-amber-800 border-amber-200';
+      }
+      return 'bg-rose-100 text-rose-800 border-rose-200';
+    }
+
+    function renderMapAndDirectory() {
+      const filteredTrees = getFilteredTrees();
+      const countLabel = document.getElementById('mapFilteredCount');
+      if (countLabel) {
+        countLabel.textContent = `Menampilkan ${filteredTrees.length} pohon`;
+      }
+
+      if (!selectedTreeCode && filteredTrees.length > 0) {
+        selectedTreeCode = filteredTrees[0].treeCode;
+      } else if (filteredTrees.length > 0 && !filteredTrees.some((t) => t.treeCode === selectedTreeCode)) {
+        selectedTreeCode = filteredTrees[0].treeCode;
+      }
+
+      if (mapInstance && markersLayer) {
+        markersLayer.clearLayers();
+        const bounds = [];
+
+        filteredTrees.forEach((tree) => {
+          const quality = tree.latest?.growthQuality || 'Baik';
+          const colorHex = getQualityColorHex(quality);
+
+          const pinIcon = L.divIcon({
+            className: 'custom-tree-pin-wrapper',
+            html: `<div class="tree-pin" style="background-color:${colorHex};"><div class="tree-pin-inner"></div></div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 28],
+            popupAnchor: [0, -26]
+          });
+
+          const marker = L.marker([tree.lat, tree.lng], { icon: pinIcon });
+          const photoHtml = tree.latest?.photoDriveUrl
+            ? `<div class="mt-2"><img src="${escapeHtml(tree.latest.photoDriveUrl)}" alt="${escapeHtml(tree.treeCode)}" class="w-full h-24 object-cover rounded-lg border border-stone-200" onerror="this.style.display='none'"/></div>`
+            : '';
+
+          marker.bindPopup(`
+            <div class="min-w-[210px] space-y-1">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-mono font-bold text-xs text-rimba-900">${escapeHtml(tree.treeCode)}</span>
+                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full border ${getQualityBadgeClasses(quality)}">${escapeHtml(quality)}</span>
+              </div>
+              <div class="font-bold text-sm text-stone-900">${escapeHtml(tree.species)}</div>
+              <div class="text-xs text-stone-600">${escapeHtml(tree.dusun)}</div>
+              <div class="text-xs text-stone-700 pt-1 border-t border-stone-100">
+                Tinggi: <strong>${escapeHtml(String(tree.latest?.heightCm || 0))} cm</strong> • Update: <strong>${escapeHtml(tree.latest?.updateDate || '-')}</strong>
+              </div>
+              <div class="text-[11px] text-stone-500">Warga: ${escapeHtml(tree.latest?.caretakerName || '-')}</div>
+              ${photoHtml}
+            </div>
+          `);
+
+          marker.on('click', () => {
+            selectedTreeCode = tree.treeCode;
+            renderSelectedTreeDetail();
+            renderQuickTreeList(filteredTrees);
+          });
+
+          marker.addTo(markersLayer);
+          bounds.push([tree.lat, tree.lng]);
+        });
+
+        if (bounds.length > 0) {
+          mapInstance.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });
+        }
+      }
+
+      renderSelectedTreeDetail();
+      renderQuickTreeList(filteredTrees);
+    }
+
+    function renderSelectedTreeDetail() {
+      const container = document.getElementById('selectedTreeCard');
+      if (!container) return;
+
+      const allTrees = getGroupedTrees();
+      const tree = allTrees.find((t) => t.treeCode === selectedTreeCode);
+
+      if (!tree || !tree.latest) {
+        container.innerHTML = '<p class="text-sm text-stone-500">Tidak ada pohon yang sesuai dengan filter saat ini.</p>';
+        return;
+      }
+
+      const lat = tree.latest;
+      const badgeClass = getQualityBadgeClasses(lat.growthQuality);
+      const photoBlock = lat.photoDriveUrl
+        ? `<div class="rounded-xl overflow-hidden border border-stone-200 bg-white">
+             <img src="${escapeHtml(lat.photoDriveUrl)}" alt="Foto ${escapeHtml(tree.treeCode)}" class="w-full h-36 object-cover" onerror="this.src='https://placehold.co/600x300/e1f6e8/1b482f?text=Foto+Google+Drive'"/>
+           </div>`
+        : '';
+
+      container.innerHTML = `
+        ${photoBlock}
+        <div class="flex items-center justify-between gap-2 pt-1">
+          <span class="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-rimba-900 text-white">${escapeHtml(tree.treeCode)}</span>
+          <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full border ${badgeClass}">${escapeHtml(lat.growthQuality)}</span>
+        </div>
+        <div>
+          <h4 class="text-base font-bold text-stone-900">${escapeHtml(tree.species)}</h4>
+          <p class="text-xs text-stone-600">${escapeHtml(tree.dusun)}</p>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs bg-white p-3 rounded-xl border border-stone-200/70">
+          <div>
+            <span class="text-stone-400 block">Tinggi Terakhir</span>
+            <strong class="text-stone-800 text-sm">${escapeHtml(String(lat.heightCm))} cm</strong>
+          </div>
+          <div>
+            <span class="text-stone-400 block">Update Terakhir</span>
+            <strong class="text-stone-800">${escapeHtml(lat.updateDate)}</strong>
+          </div>
+          <div>
+            <span class="text-stone-400 block">Penanggung Jawab</span>
+            <strong class="text-stone-800">${escapeHtml(lat.caretakerName)}</strong>
+          </div>
+          <div>
+            <span class="text-stone-400 block">Jumlah Laporan</span>
+            <strong class="text-rimba-800">${tree.history.length}x bulan</strong>
+          </div>
+        </div>
+        <p class="text-xs text-stone-600 italic">"${escapeHtml(lat.conditionNotes || 'Tidak ada catatan tambahan.')}"</p>
+        <div class="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onclick="prepareUpdateForCode('${escapeHtml(tree.treeCode)}')"
+            class="flex-1 py-2 px-3 rounded-xl bg-rimba-700 hover:bg-rimba-800 text-white text-xs font-semibold transition">
+            + Update Pohon Ini
+          </button>
+          <button
+            type="button"
+            onclick="focusTreeOnMap('${escapeHtml(tree.treeCode)}')"
+            class="py-2 px-3 rounded-xl border border-stone-300 hover:bg-stone-100 text-stone-700 text-xs font-semibold transition">
+            Fokus Pin
+          </button>
+        </div>
+      `;
+    }
+
+    function renderQuickTreeList(trees) {
+      const listEl = document.getElementById('quickTreeList');
+      if (!listEl) return;
+
+      if (!trees.length) {
+        listEl.innerHTML = '<p class="text-xs text-stone-400">Belum ada data pohon.</p>';
+        return;
+      }
+
+      listEl.innerHTML = trees.map((tree) => {
+        const isSelected = tree.treeCode === selectedTreeCode;
+        const q = tree.latest?.growthQuality || 'Baik';
+        const dotColor = getQualityColorHex(q);
+        return `
+          <button
+            type="button"
+            onclick="selectAndFocusTree('${escapeHtml(tree.treeCode)}')"
+            class="w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between gap-2 ${
+              isSelected
+                ? 'bg-rimba-50 border-rimba-500 shadow-xs'
+                : 'bg-white border-stone-200 hover:bg-stone-50'
+            }">
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${dotColor};"></span>
+                <span class="font-mono text-xs font-bold text-rimba-950">${escapeHtml(tree.treeCode)}</span>
+                <span class="text-xs font-semibold text-stone-800 truncate">${escapeHtml(tree.species)}</span>
+              </div>
+              <p class="text-[11px] text-stone-500 truncate pl-4">${escapeHtml(tree.dusun)} • ${escapeHtml(String(tree.latest?.heightCm || 0))} cm</p>
+            </div>
+            <span class="text-[11px] font-semibold text-stone-500 shrink-0">${escapeHtml(q)}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectAndFocusTree(code) {
+      selectedTreeCode = code;
+      renderSelectedTreeDetail();
+      renderQuickTreeList(getFilteredTrees());
+      focusTreeOnMap(code);
+    }
+
+    function focusTreeOnMap(code) {
+      const tree = getGroupedTrees().find((t) => t.treeCode === code);
+      if (tree && mapInstance) {
+        mapInstance.setView([tree.lat, tree.lng], 16, { animate: true });
+      }
+    }
+
+    // Submission Form Mode & Helpers
+    function setSubmissionMode(mode) {
+      submissionMode = mode;
+      const existingBtn = document.getElementById('modeExistingBtn');
+      const newBtn = document.getElementById('modeNewBtn');
+      const existingSec = document.getElementById('existingTreeSection');
+      const newSec = document.getElementById('newTreeSection');
+
+      if (mode === 'existing') {
+        existingBtn.className = 'p-3.5 rounded-xl border-2 border-rimba-600 bg-rimba-50 text-left transition';
+        newBtn.className = 'p-3.5 rounded-xl border-2 border-stone-200 bg-white hover:border-stone-300 text-left transition';
+        existingSec.classList.remove('hidden');
+        newSec.classList.add('hidden');
+        populateExistingTreeSelect();
+      } else {
+        newBtn.className = 'p-3.5 rounded-xl border-2 border-rimba-600 bg-rimba-50 text-left transition';
+        existingBtn.className = 'p-3.5 rounded-xl border-2 border-stone-200 bg-white hover:border-stone-300 text-left transition';
+        existingSec.classList.add('hidden');
+        newSec.classList.remove('hidden');
+        if (!document.getElementById('newTreeCode').value) {
+          generateNextTreeCode();
+        }
+      }
+    }
+
+    function populateExistingTreeSelect() {
+      const selectEl = document.getElementById('selectExistingTree');
+      if (!selectEl) return;
+
+      const trees = getGroupedTrees();
+      if (!trees.length) {
+        selectEl.innerHTML = '<option value="">Belum ada pohon terdaftar — silakan pilih Daftarkan Pohon Baru</option>';
+        return;
+      }
+
+      selectEl.innerHTML = trees.map((t) =>
+        `<option value="${escapeHtml(t.treeCode)}">${escapeHtml(t.treeCode)} — ${escapeHtml(t.species)} (${escapeHtml(t.dusun)})</option>`
+      ).join('');
+
+      if (selectedTreeCode && trees.some((t) => t.treeCode === selectedTreeCode)) {
+        selectEl.value = selectedTreeCode;
+      }
+
+      onExistingTreeChange();
+    }
+
+    function onExistingTreeChange() {
+      const selectEl = document.getElementById('selectExistingTree');
+      const badgeEl = document.getElementById('selectedExistingCodeBadge');
+      const hintEl = document.getElementById('existingTreeHint');
+      const caretakerEl = document.getElementById('caretakerName');
+
+      const code = selectEl?.value;
+      const tree = getGroupedTrees().find((t) => t.treeCode === code);
+
+      if (badgeEl) badgeEl.textContent = `Kode: ${code || '-'}`;
+      if (tree && tree.latest) {
+        if (hintEl) {
+          hintEl.textContent = `Tinggi terakhir: ${tree.latest.heightCm} cm (${tree.latest.updateDate}) • Kualitas: ${tree.latest.growthQuality} • PJ: ${tree.latest.caretakerName}`;
+        }
+        if (caretakerEl && !caretakerEl.value) {
+          caretakerEl.value = tree.latest.caretakerName || '';
+        }
+      }
+    }
+
+    function prepareUpdateForCode(code) {
+      selectedTreeCode = code;
+      switchTab('update');
+      setSubmissionMode('existing');
+      const selectEl = document.getElementById('selectExistingTree');
+      if (selectEl) {
+        selectEl.value = code;
+        onExistingTreeChange();
+      }
+    }
+
+    function generateNextTreeCode() {
+      const trees = getGroupedTrees();
+      let maxNum = 0;
+      trees.forEach((t) => {
+        const match = t.treeCode.match(/PHN-(\d+)/i);
+        if (match) {
+          const n = parseInt(match[1], 10);
+          if (n > maxNum) maxNum = n;
+        }
+      });
+      const nextCode = `PHN-${String(maxNum + 1).padStart(3, '0')}`;
+      const inputEl = document.getElementById('newTreeCode');
+      if (inputEl) inputEl.value = nextCode;
+    }
+
+    function useCurrentGPS() {
+      if (!navigator.geolocation) {
+        showToast('Perangkat ini tidak mendukung GPS otomatis. Isi koordinat manual.', 'warning');
+        return;
+      }
+      showToast('Mengambil koordinat GPS lokasi Anda...', 'info');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          document.getElementById('newTreeLat').value = pos.coords.latitude.toFixed(6);
+          document.getElementById('newTreeLng').value = pos.coords.longitude.toFixed(6);
+          showToast('Koordinat GPS berhasil diambil!', 'success');
+        },
+        () => {
+          showToast('Izin lokasi ditolak atau sinyal GPS lemah. Koordinat default desa dipakai.', 'warning');
+        }
+      );
+    }
+
+    function handlePhotoFileSelect(event) {
+      const file = event.target.files?.[0];
+      const statusEl = document.getElementById('photoFileStatus');
+      const previewBox = document.getElementById('photoPreviewBox');
+      const previewImg = document.getElementById('photoPreviewImg');
+
+      if (!file) {
+        compressedPhotoBase64 = '';
+        compressedPhotoFileName = '';
+        if (previewBox) previewBox.classList.add('hidden');
+        return;
+      }
+
+      if (statusEl) {
+        statusEl.textContent = 'Mengompresi foto agar ringan dikirim ke Google Drive...';
+      }
+
+      compressImageFile(file, 1024, 0.8)
+        .then(({ dataUrl, fileName, sizeKB }) => {
+          compressedPhotoBase64 = dataUrl;
+          compressedPhotoFileName = fileName;
+
+          if (previewImg && previewBox) {
+            previewImg.src = dataUrl;
+            previewBox.classList.remove('hidden');
+          }
+          if (statusEl) {
+            statusEl.textContent = `Siap diunggah: ${fileName} (${sizeKB} KB setelah kompresi)`;
+          }
+        })
+        .catch((err) => {
+          console.error('Gagal memproses foto:', err);
+          showToast('Gagal memproses file foto. Coba pilih foto lain.', 'warning');
+          event.target.value = '';
+        });
+    }
+
+    function compressImageFile(file, maxWidth = 1024, quality = 0.8) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Gagal membaca file'));
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Format gambar tidak valid'));
+          img.onload = () => {
+            let targetW = img.width;
+            let targetH = img.height;
+
+            if (targetW > maxWidth) {
+              targetH = Math.round((targetH * maxWidth) / targetW);
+              targetW = maxWidth;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW;
+            canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            const approxBytes = Math.round((dataUrl.length * 3) / 4);
+            const sizeKB = Math.max(1, Math.round(approxBytes / 1024));
+            const baseName = file.name.replace(/\.[^/.]+$/, '');
+            resolve({
+              dataUrl,
+              fileName: `${baseName}.jpg`,
+              sizeKB
+            });
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function handleFormSubmit(event) {
+      event.preventDefault();
+
+      const submitBtn = document.getElementById('submitUpdateBtn');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>⏳ Mengirim ke Google Sheet &amp; Drive...</span>';
+
+      try {
+        let treeCode = '';
+        let species = '';
+        let dusun = '';
+        let lat = -7.793;
+        let lng = 110.368;
+        let plantedDate = new Date().toISOString().split('T')[0];
+
+        if (submissionMode === 'existing') {
+          treeCode = (document.getElementById('selectExistingTree').value || '').trim().toUpperCase();
+          if (!treeCode) {
+            showToast('Silakan pilih pohon terdaftar terlebih dahulu.', 'warning');
+            return;
+          }
+          const existingTree = getGroupedTrees().find((t) => t.treeCode === treeCode);
+          if (!existingTree) {
+            showToast('Kode pohon tidak ditemukan.', 'warning');
+            return;
+          }
+          species = existingTree.species;
+          dusun = existingTree.dusun;
+          lat = existingTree.lat;
+          lng = existingTree.lng;
+          plantedDate = existingTree.plantedDate;
+        } else {
+          treeCode = (document.getElementById('newTreeCode').value || '').trim().toUpperCase();
+          species = (document.getElementById('newTreeSpecies').value || '').trim();
+          dusun = (document.getElementById('newTreeDusun').value || '').trim();
+          plantedDate = document.getElementById('newTreePlantedDate').value || new Date().toISOString().split('T')[0];
+          const rawLat = parseFloat(document.getElementById('newTreeLat').value);
+          const rawLng = parseFloat(document.getElementById('newTreeLng').value);
+          lat = Number.isNaN(rawLat) ? -7.793 : rawLat;
+          lng = Number.isNaN(rawLng) ? 110.368 : rawLng;
+
+          if (!treeCode || !species || !dusun) {
+            showToast('Lengkapi Kode Pohon, Jenis Pohon, dan Lokasi Dusun/RT/RW.', 'warning');
+            return;
+          }
+        }
+
+        const caretakerName = (document.getElementById('caretakerName').value || '').trim();
+        const bulanLaporan = document.getElementById('reportMonth').value;
+        const heightCm = Number(document.getElementById('heightCm').value);
+        const growthQuality = document.getElementById('growthQuality').value;
+        const conditionNotes = (document.getElementById('conditionNotes').value || '').trim();
+        let photoDriveUrl = (document.getElementById('photoDriveUrl').value || '').trim();
+
+        // Payload sesuai persis dengan parameter doPost pada Kode.gs
+        const apiPayload = {
+          kodePohon: treeCode,
+          namaWarga: caretakerName,
+          wilayah: dusun,
+          jenisPohon: species,
+          latitude: lat,
+          longitude: lng,
+          tinggiCm: heightCm,
+          kualitas: growthQuality,
+          catatan: conditionNotes,
+          bulanLaporan: bulanLaporan,
+          fotoUrl: photoDriveUrl,
+          fotoBase64: compressedPhotoBase64 || '',
+          namaFile: compressedPhotoFileName || 'foto_pohon.jpg'
+        };
+
+        let syncedSuccessfully = false;
+
+        if (activeScriptUrl) {
+          try {
+            const response = await fetch(activeScriptUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(apiPayload)
+            });
+            const result = await response.json();
+            if (result && result.ok) {
+              syncedSuccessfully = true;
+              if (result.fotoUrl) {
+                photoDriveUrl = result.fotoUrl;
+              }
+              showToast(`Laporan ${treeCode} berhasil masuk ke Google Sheet & Drive!`, 'success');
+            } else {
+              throw new Error(result?.error || 'Respons server tidak valid');
+            }
+          } catch (netErr) {
+            console.warn('Gagal mengirim ke Google Apps Script:', netErr);
+            showToast(`Tersimpan di HP dulu (gagal kirim ke Sheet: ${netErr.message})`, 'warning');
+          }
+        }
+
+        const localRecord = {
+          id: `upd-${Date.now()}`,
+          treeCode,
+          species,
+          dusun,
+          lat,
+          lng,
+          plantedDate,
+          caretakerName,
+          updateDate: bulanLaporan,
+          heightCm,
+          growthQuality,
+          conditionNotes,
+          photoDriveUrl
+        };
+
+        records.push(localRecord);
+        saveRecordsToStorage();
+        selectedTreeCode = treeCode;
+
+        // Reset input form bulanan
+        document.getElementById('heightCm').value = '';
+        document.getElementById('conditionNotes').value = '';
+        document.getElementById('photoDriveUrl').value = '';
+        document.getElementById('photoFileInput').value = '';
+        document.getElementById('photoPreviewBox').classList.add('hidden');
+        document.getElementById('photoFileStatus').textContent = 'Pilih foto dari kamera atau galeri HP. Foto akan dikompresi otomatis sebelum dikirim ke Google Drive.';
+        compressedPhotoBase64 = '';
+        compressedPhotoFileName = '';
+
+        renderAllViews();
+        if (syncedSuccessfully) {
+          // Segarkan data dari Sheet agar urutan dan URL foto 100% sinkron
+          syncFromGoogleSheet(true);
+        }
+        switchTab('riwayat');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>💾</span><span>Simpan Update Bulanan</span>';
+      }
+    }
+
+    // Charts in Riwayat Tab
+    function renderCharts() {
+      if (typeof Chart === 'undefined') return;
+
+      const trees = getGroupedTrees();
+      let baik = 0;
+      let cukup = 0;
+      let perlu = 0;
+
+      const dusunHeights = new Map();
+
+      trees.forEach((t) => {
+        const q = t.latest?.growthQuality;
+        if (q === 'Baik') baik += 1;
+        else if (q === 'Cukup') cukup += 1;
+        else perlu += 1;
+
+        const h = Number(t.latest?.heightCm || 0);
+        if (!dusunHeights.has(t.dusun)) {
+          dusunHeights.set(t.dusun, []);
+        }
+        dusunHeights.get(t.dusun).push(h);
+      });
+
+      const qCtx = document.getElementById('qualityChartCanvas')?.getContext('2d');
+      if (qCtx) {
+        if (qualityChartInstance) qualityChartInstance.destroy();
+        qualityChartInstance = new Chart(qCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['Baik', 'Cukup', 'Perlu Perhatian'],
+            datasets: [{
+              data: [baik, cukup, perlu],
+              backgroundColor: ['#10b981', '#f59e0b', '#f43f5e'],
+              borderWidth: 2,
+              borderColor: '#ffffff'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom' }
+            }
+          }
+        });
+      }
+
+      const dLabels = Array.from(dusunHeights.keys());
+      const dAvgs = dLabels.map((label) => {
+        const arr = dusunHeights.get(label);
+        const sum = arr.reduce((a, b) => a + b, 0);
+        return arr.length ? Math.round(sum / arr.length) : 0;
+      });
+
+      const dCtx = document.getElementById('dusunHeightChartCanvas')?.getContext('2d');
+      if (dCtx) {
+        if (dusunChartInstance) dusunChartInstance.destroy();
+        dusunChartInstance = new Chart(dCtx, {
+          type: 'bar',
+          data: {
+            labels: dLabels,
+            datasets: [{
+              label: 'Rata-Rata Tinggi (cm)',
+              data: dAvgs,
+              backgroundColor: '#2b8a52',
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: { beginAtZero: true }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+    }
+
+    // Tracking & History Cards
+    function renderHistoryList() {
+      const container = document.getElementById('trackingCardsContainer');
+      if (!container) return;
+
+      const query = (document.getElementById('searchTrackingInput')?.value || '').trim().toLowerCase();
+      const qualityFilter = document.getElementById('historyQualityFilter')?.value || 'ALL';
+
+      const trees = getGroupedTrees().filter((tree) => {
+        const latestQuality = tree.latest?.growthQuality || 'Baik';
+        const matchQuality = qualityFilter === 'ALL' || latestQuality === qualityFilter;
+        if (!matchQuality) return false;
+
+        if (!query) return true;
+        const hay = [
+          tree.treeCode,
+          tree.species,
+          tree.dusun,
+          tree.latest?.caretakerName || '',
+          ...(tree.history || []).map((h) => `${h.caretakerName} ${h.conditionNotes}`)
+        ].join(' ').toLowerCase();
+
+        return hay.includes(query);
+      });
+
+      if (!trees.length) {
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl p-8 text-center border border-tanah-200 text-stone-500 text-sm">
+            Tidak ada data pohon yang cocok dengan pencarian Anda.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = trees.map((tree) => {
+        const latest = tree.latest || {};
+        const badgeClass = getQualityBadgeClasses(latest.growthQuality);
+
+        // Timeline ordered newest first
+        const timelineItems = [...tree.history].reverse().map((item, idx) => {
+          const prevItem = idx < tree.history.length - 1 ? [...tree.history].reverse()[idx + 1] : null;
+          const diffHeight = prevItem ? Number(item.heightCm) - Number(prevItem.heightCm) : null;
+          const diffBadge = diffHeight !== null
+            ? `<span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${diffHeight >= 0 ? 'bg-rimba-100 text-rimba-800' : 'bg-rose-100 text-rose-800'}">${diffHeight >= 0 ? '+' : ''}${diffHeight} cm</span>`
+            : '';
+
+          const photoLinkHtml = item.photoDriveUrl
+            ? `<a href="${escapeHtml(item.photoDriveUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs font-semibold text-rimba-700 hover:underline mt-1.5">
+                 🖼️ Lihat Foto (Google Drive) ↗
+               </a>`
+            : '';
+
+          return `
+            <div class="p-3.5 rounded-xl bg-tanah-50/80 border border-stone-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="space-y-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs font-bold text-stone-900">${escapeHtml(item.updateDate)}</span>
+                  <span class="text-xs font-semibold text-rimba-800">• Tinggi: ${escapeHtml(String(item.heightCm))} cm</span>
+                  ${diffBadge}
+                  ${item.trunkCm ? `<span class="text-xs text-stone-600">• Lingkar: ${escapeHtml(String(item.trunkCm))} cm</span>` : ''}
+                  <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full border ${getQualityBadgeClasses(item.growthQuality)}">${escapeHtml(item.growthQuality)}</span>
+                </div>
+                <p class="text-xs text-stone-700">${escapeHtml(item.conditionNotes || 'Update rutin bulanan.')}</p>
+                <p class="text-[11px] text-stone-500">Dilaporkan oleh: <strong>${escapeHtml(item.caretakerName)}</strong></p>
+                ${photoLinkHtml}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <article class="bg-white rounded-2xl p-5 border border-tanah-200 shadow-sm space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-rimba-900 text-white">${escapeHtml(tree.treeCode)}</span>
+                  <h3 class="text-base font-bold text-stone-950">${escapeHtml(tree.species)}</h3>
+                  <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full border ${badgeClass}">${escapeHtml(latest.growthQuality || 'Baik')}</span>
+                </div>
+                <p class="text-xs text-stone-600 mt-1">
+                  ${escapeHtml(tree.dusun)} • Ditanam: ${escapeHtml(tree.plantedDate)} • Tinggi Terkini: <strong>${escapeHtml(String(latest.heightCm || 0))} cm</strong>
+                </p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  onclick="prepareUpdateForCode('${escapeHtml(tree.treeCode)}')"
+                  class="px-3.5 py-2 rounded-xl bg-rimba-700 hover:bg-rimba-800 text-white text-xs font-semibold transition">
+                  + Tambah Update Bulan Ini
+                </button>
+              </div>
+            </div>
+
+            <div class="space-y-2.5">
+              <div class="text-xs font-bold uppercase tracking-wider text-stone-400">
+                Riwayat Bulanan (${tree.history.length} catatan)
+              </div>
+              ${timelineItems}
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    // Export CSV helper
+    function exportFilteredCSV() {
+      if (!records.length) {
+        showToast('Tidak ada data untuk diunduh.', 'warning');
+        return;
+      }
+      const headers = [
+        'Kode_Pohon', 'Jenis_Pohon', 'Wilayah', 'Latitude', 'Longitude',
+        'Nama_Warga', 'Bulan_Laporan', 'Tinggi_cm', 'Kualitas',
+        'Catatan', 'Foto_URL'
+      ];
+      const csvRows = [
+        headers.join(','),
+        ...records.map((r) => [
+          r.treeCode, r.species, r.dusun, r.lat, r.lng,
+          r.caretakerName, r.updateDate, r.heightCm, r.growthQuality,
+          r.conditionNotes, r.photoDriveUrl
+        ].map((val) => `"${String(val ?? '').replace(/"/g, '""')}"`).join(','))
+      ];
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pantau-pohon-desa-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Rekap CSV berhasil diunduh.', 'success');
+    }
+
+    // Google Sheet + Drive Backend Sync
+    function populateConfigInputs() {
+      const urlEl = document.getElementById('gasWebAppUrlInput');
+      if (urlEl) urlEl.value = activeScriptUrl || DEFAULT_SCRIPT_URL;
+    }
+
+    function saveBackendConfig() {
+      const urlEl = document.getElementById('gasWebAppUrlInput');
+      const newUrl = (urlEl?.value || '').trim();
+      if (!newUrl) {
+        showToast('Masukkan URL Web App terlebih dahulu.', 'warning');
+        return;
+      }
+      activeScriptUrl = newUrl;
+      try {
+        localStorage.setItem(STORAGE_KEYS.CUSTOM_URL, activeScriptUrl);
+      } catch (err) {
+        console.warn(err);
+      }
+      showToast('URL Web App diperbarui. Menguji koneksi...', 'info');
+      syncFromGoogleSheet(false);
+    }
+
+    function resetToDefaultScriptUrl() {
+      activeScriptUrl = DEFAULT_SCRIPT_URL;
+      try {
+        localStorage.removeItem(STORAGE_KEYS.CUSTOM_URL);
+      } catch (err) {
+        console.warn(err);
+      }
+      populateConfigInputs();
+      showToast('Kembali menggunakan URL Web App default desa.', 'info');
+      syncFromGoogleSheet(false);
+    }
+
+    function updateSyncBadge(status = 'connecting') {
+      const badge = document.getElementById('syncStatusBadge');
+      const detailBadge = document.getElementById('connectionDetailBadge');
+
+      if (status === 'connected') {
+        if (badge) {
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Terhubung Google Sheet';
+        }
+        if (detailBadge) {
+          detailBadge.className = 'self-start sm:self-center text-xs font-semibold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200';
+          detailBadge.textContent = 'Terhubung ke Google Sheet';
+        }
+      } else if (status === 'empty') {
+        if (badge) {
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-sky-400"></span> Sheet Terhubung (Data Demo)';
+        }
+        if (detailBadge) {
+          detailBadge.className = 'self-start sm:self-center text-xs font-semibold px-3 py-1 rounded-full bg-sky-100 text-sky-800 border border-sky-200';
+          detailBadge.textContent = 'Sheet Aktif (Belum Ada Baris)';
+        }
+      } else {
+        if (badge) {
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400"></span> Mode Offline / Cache Lokal';
+        }
+        if (detailBadge) {
+          detailBadge.className = 'self-start sm:self-center text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200';
+          detailBadge.textContent = 'Mode Offline (Cache Lokal)';
+        }
+      }
+    }
+
+    function formatMonthOrDate(rawVal) {
+      if (!rawVal) return '';
+      const str = String(rawVal).trim();
+      // Jika Google Sheets mengembalikan ISO Date string untuk Bulan_Laporan
+      if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
+        return str.slice(0, 7);
+      }
+      return str;
+    }
+
+    async function syncFromGoogleSheet(silent = false) {
+      if (!activeScriptUrl) {
+        updateSyncBadge('offline');
+        renderAllViews();
+        return;
+      }
+
+      try {
+        const res = await fetch(activeScriptUrl, { method: 'GET' });
+        const payload = await res.json();
+
+        // Mendukung format { ok: true, data: [...] } dari Kode.gs
+        const rows = Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload?.records)
+          ? payload.records
+          : null;
+
+        if (payload && payload.ok && Array.isArray(rows)) {
+          isConnectedToSheet = true;
+          if (rows.length > 0) {
+            records = rows
+              .filter((r) => r.Kode_Pohon || r.kodePohon)
+              .map((r, i) => ({
+                id: `gs-${i}-${Date.now()}`,
+                treeCode: String(r.Kode_Pohon || r.kodePohon || '').trim().toUpperCase(),
+                species: String(r.Jenis_Pohon || r.jenisPohon || 'Pohon Desa').trim(),
+                dusun: String(r.Wilayah || r.wilayah || 'Wilayah Desa').trim(),
+                lat: parseFloat(r.Latitude ?? r.latitude) || -7.793,
+                lng: parseFloat(r.Longitude ?? r.longitude) || 110.368,
+                plantedDate: formatMonthOrDate(r.Timestamp) ? String(r.Timestamp).slice(0, 10) : '-',
+                caretakerName: String(r.Nama_Warga || r.namaWarga || '-').trim(),
+                updateDate: formatMonthOrDate(r.Bulan_Laporan || r.bulanLaporan || r.Timestamp),
+                heightCm: Number(r.Tinggi_cm ?? r.tinggiCm ?? 0),
+                growthQuality: String(r.Kualitas || r.kualitas || 'Baik').trim(),
+                conditionNotes: String(r.Catatan || r.catatan || '').trim(),
+                photoDriveUrl: String(r.Foto_URL || r.fotoUrl || '').trim()
+              }));
+            saveRecordsToStorage();
+            updateSyncBadge('connected');
+            renderAllViews();
+            if (!silent) showToast(`Berhasil memuat ${records.length} catatan pohon dari Google Sheet!`, 'success');
+          } else {
+            updateSyncBadge('empty');
+            renderAllViews();
+            if (!silent) showToast('Terhubung ke Google Sheet! Sheet masih kosong, menampilkan data contoh.', 'info');
+          }
+        } else {
+          throw new Error(payload?.error || 'Format respons tidak dikenali');
+        }
+      } catch (err) {
+        isConnectedToSheet = false;
+        updateSyncBadge('offline');
+        renderAllViews();
+        console.warn('Gagal menarik data dari Google Sheet:', err);
+        if (!silent) {
+          showToast('Tidak dapat menjangkau Google Sheet (cek internet atau izin Web App). Menampilkan data lokal.', 'warning');
+        }
+      }
+    }
+
+    async function syncFromGoogleSheet(silent = false) {
+      if (!config.gasWebAppUrl) {
+        if (!silent) {
+          showToast('Belum ada Web App URL. Data lokal sedang ditampilkan.', 'info');
+        }
+        renderAllViews();
+        return;
+      }
+
+      try {
+        const res = await fetch(config.gasWebAppUrl);
+        const data = await res.json();
+        if (data && data.ok && Array.isArray(data.records) && data.records.length > 0) {
+          records = data.records.map((r, i) => ({
+            id: r.id || `gs-${i}-${Date.now()}`,
+            treeCode: String(r.treeCode || '').trim().toUpperCase(),
+            species: r.species || '',
+            dusun: r.dusun || '',
+            lat: r.lat || -7.793,
+            lng: r.lng || 110.368,
+            plantedDate: r.plantedDate || '',
+            caretakerName: r.caretakerName || '',
+            updateDate: r.updateDate || '',
+            heightCm: Number(r.heightCm || 0),
+            trunkCm: r.trunkCm || '',
+            growthQuality: r.growthQuality || 'Baik',
+            conditionNotes: r.conditionNotes || '',
+            photoDriveUrl: r.photoDriveUrl || ''
+          }));
+          saveRecordsToStorage();
+          renderAllViews();
+          if (!silent) showToast('Data terbaru berhasil ditarik dari Google Sheet!', 'success');
+        } else if (!silent) {
+          showToast('Google Sheet terhubung, belum ada baris data baru.', 'info');
+        }
+      } catch (err) {
+        console.error('Gagal menarik data dari Google Sheet:', err);
+        if (!silent) showToast('Gagal menarik data dari Google Sheet. Periksa izin akses Web App.', 'warning');
+      }
+    }
+
+    function restoreDefaultSampleData() {
+      records = [...DEFAULT_RECORDS];
+      saveRecordsToStorage();
+      selectedTreeCode = 'PHN-001';
+      renderAllViews();
+      showToast('Data contoh pohon desa dipulihkan.', 'success');
+    }
+
+    function copyAppsScriptCode() {
+      const codeText = document.getElementById('appsScriptCodeBlock')?.innerText || '';
+      if (!codeText) return;
+
+      const tempArea = document.createElement('textarea');
+      tempArea.value = codeText;
+      document.body.appendChild(tempArea);
+      tempArea.select();
+      try {
+        document.execCommand('copy');
+        showToast('Kode Google Apps Script berhasil disalin!', 'success');
+      } catch (err) {
+        showToast('Gagal menyalin otomatis, silakan blok dan salin manual.', 'warning');
+      }
+      document.body.removeChild(tempArea);
+    }
+
+    function renderAllViews() {
+      renderStats();
+      populateFilterOptions();
+      renderMapAndDirectory();
+      populateExistingTreeSelect();
+      if (!document.getElementById('view-riwayat')?.classList.contains('hidden')) {
+        renderCharts();
+        renderHistoryList();
+      }
+    }
+
+    // Toast notification helper
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+
+      const colorMap = {
+        success: 'bg-rimba-900 text-white border-rimba-600',
+        warning: 'bg-amber-900 text-amber-50 border-amber-600',
+        info: 'bg-stone-800 text-white border-stone-600'
+      };
+
+      const el = document.createElement('div');
+      el.className = `toast-enter pointer-events-auto px-4 py-3 rounded-xl border shadow-lg text-xs sm:text-sm font-medium ${colorMap[type] || colorMap.info}`;
+      el.textContent = message;
+      container.appendChild(el);
+
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 0.25s ease';
+        setTimeout(() => el.remove(), 260);
+      }, 3400);
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+  </script>
+</body>
+</html>
